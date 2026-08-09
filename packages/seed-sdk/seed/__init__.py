@@ -8,6 +8,7 @@ from .exceptions import (
     SeedError,
     ValidationError,
 )
+from .llm import LLMParams, LLMResult, SeedLLM
 from .providers import AudioProvider, BytePlusProvider, FalProvider, get_provider
 from .types import AudioParams, TaskResult
 
@@ -23,9 +24,13 @@ __all__ = [
     # Types
     "AudioParams",
     "TaskResult",
+    "LLMParams",
+    "LLMResult",
     # Providers
     "AudioProvider",
     "FalProvider",
     "BytePlusProvider",
     "get_provider",
+    # LLM
+    "SeedLLM",
 ]

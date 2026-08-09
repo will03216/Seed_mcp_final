@@ -1,7 +1,8 @@
-# BytePlus Seed Audio
+# BytePlus Seed
 
-Generate natural speech and audio with **BytePlus Seed Audio 1.0** — from Claude, the
-terminal, or your own code. Three surfaces over one zero-dependency SDK:
+Generate natural speech/audio with **Seed Audio 1.0** and text with the **Seed LLM**
+(`seed-2-0-pro-260328`, `dola-seed-2-1-turbo-260628`) — from Claude, the terminal, or your
+own code. Three surfaces over one zero-dependency SDK:
 
 | I want to… | Use |
 |---|---|
@@ -10,7 +11,12 @@ terminal, or your own code. Three surfaces over one zero-dependency SDK:
 | Claude Code skill | **Skill** (`skills/seed.md`) |
 | Build my own integration | **SDK** (`seed-sdk`) |
 
-> **Providers:** Seed Audio runs on **two interchangeable backends**, chosen with
+> **Two model families, one toolkit.** *Seed Audio* (speech/TTS + voice cloning) and *Seed
+> LLM* (text generation, tool use, and remote-MCP passthrough via the BytePlus **Ark
+> Responses API**). Audio needs `BYTEPLUS_SEED_API_KEY`; the LLM needs `ARK_API_KEY` — they
+> are independent, set whichever you need.
+
+> **Audio providers:** Seed Audio runs on **two interchangeable backends**, chosen with
 > `SEED_PROVIDER`: **BytePlus** (default — the native `voice.ap-southeast-1.bytepluses.com`
 > API, synchronous; also works against the Volcengine host via `SEED_BYTEPLUS_TTS_URL`) or
 > **fal.ai** (`SEED_PROVIDER=fal`, `bytedance/seed-audio-1.0`, async). The SDK hides the
@@ -20,10 +26,11 @@ terminal, or your own code. Three surfaces over one zero-dependency SDK:
 ## Prerequisites
 
 - **Python 3.10+** and a local clone of this repo.
-- Credentials for one provider:
-  - **BytePlus** (default): `BYTEPLUS_SEED_API_KEY` (or the legacy `BYTEPLUS_SEED_APP_ID` +
+- Credentials for whatever you want to use:
+  - **Audio — BytePlus** (default): `BYTEPLUS_SEED_API_KEY` (or the legacy `BYTEPLUS_SEED_APP_ID` +
     `BYTEPLUS_SEED_ACCESS_KEY`) — from the BytePlus console (<https://console.byteplus.com/voice/>).
-  - **fal.ai** (optional): a `FAL_KEY` (<https://fal.ai/dashboard/keys>), then `SEED_PROVIDER=fal`.
+  - **Audio — fal.ai** (optional): a `FAL_KEY` (<https://fal.ai/dashboard/keys>), then `SEED_PROVIDER=fal`.
+  - **LLM — Ark**: `ARK_API_KEY` from the Ark console (<https://console.byteplus.com/ark/>).
 
 ## Install
 
@@ -102,8 +109,10 @@ clients authenticate with `MCP_AUTH_TOKEN` only:
 |---|---|
 | `seed_audio_generate` | Submit an audio job → returns `request_id` (or the `audio_url` directly on synchronous providers like BytePlus) |
 | `seed_check_task` | Poll until `completed`; returns `audio_url` (fal/async) |
+| `seed_llm_generate` | Generate text with a Seed LLM (synchronous); optional remote-MCP tool use |
 | `seed_list_voices` | List preset voice ids |
-| `seed_list_models` | List Seed models + capabilities |
+| `seed_list_models` | List Seed Audio models + capabilities |
+| `seed_list_llm_models` | List Seed LLM models + capabilities |
 | `seed_ping` | Liveness, active provider, credential check |
 
 ---
@@ -136,6 +145,64 @@ seed skill check
 ```
 
 Run `seed --help` for the full command reference.
+
+---
+
+## 🧠 Seed LLM (text generation)
+
+Text generation over the BytePlus **Ark Responses API**. Two models today, switchable per
+call (`--model` / the `model` arg) or globally via `SEED_LLM_MODEL`:
+
+| Model id | Alias |
+|---|---|
+| `seed-2-0-pro-260328` | `pro` (default) |
+| `dola-seed-2-1-turbo-260628` | `turbo` |
+
+```bash
+export ARK_API_KEY=<your-ark-key>            # https://console.byteplus.com/ark/
+
+# Plain text
+seed chat -p "Explain the CAP theorem in two sentences." --model turbo
+
+# Let the model call a remote MCP server (deepwiki) on your behalf
+seed chat -p "check the repo structure expressjs/express" \
+  --mcp-url https://mcp.deepwiki.com/mcp --mcp-label deepwiki
+```
+
+From the **MCP server**, the `seed_llm_generate` tool exposes the same thing to Claude —
+including MCP-tool passthrough:
+
+```jsonc
+seed_llm_generate(
+  prompt="check the repo structure expressjs/express",
+  model="seed-2-0-pro-260328",               // or "turbo", or omit for the default
+  mcp_servers=[{ "server_label": "deepwiki",
+                 "server_url": "https://mcp.deepwiki.com/mcp",
+                 "require_approval": "never" }]
+)
+```
+
+From the **SDK**:
+
+```python
+from seed import SeedClient
+
+client = SeedClient()
+result = client.generate_text(
+    "check the repo structure expressjs/express",
+    model="seed-2-0-pro-260328",             # id or alias ("pro" / "turbo")
+    mcp_servers=[{"server_label": "deepwiki",
+                  "server_url": "https://mcp.deepwiki.com/mcp"}],
+)
+print(result.text)
+
+# or stream tokens live
+for delta in client.stream_text("Write a haiku about latency.", model="turbo"):
+    print(delta, end="")
+```
+
+The SDK maps directly onto the Ark request shape (`model`, `stream`, `tools`, `input`) and
+sets the `ark-beta-mcp: true` header automatically when MCP tools are attached.
 
 ---
 
@@ -178,9 +245,9 @@ print(result.audio_url)
 ```
 byteplus-seed-mcp/
 ├── packages/
-│   ├── seed-sdk/      # core: client, types, credentials, providers/{fal,byteplus}
-│   ├── seed-mcp/      # FastMCP server (5 tools, stdio + SSE)
-│   └── seed-cli/      # Typer + Rich CLI, skill installer
+│   ├── seed-sdk/      # core: client, types, credentials, llm, providers/{fal,byteplus}
+│   ├── seed-mcp/      # FastMCP server (audio + LLM tools, stdio + SSE)
+│   └── seed-cli/      # Typer + Rich CLI (generate + chat), skill installer
 ├── skills/            # seed.md + references/
 ├── Dockerfile         # SSE server image
 ├── render.yaml        # Render.com deployment
@@ -192,11 +259,12 @@ byteplus-seed-mcp/
 Resolution order (first non-empty wins): explicit arg → env var → `~/.seed/credentials`
 `[default]` → `.env`.
 
-| Provider | Env var(s) |
+| Capability / provider | Env var(s) |
 |---|---|
-| BytePlus (default, new console) | `BYTEPLUS_SEED_API_KEY` |
-| BytePlus (legacy console) | `BYTEPLUS_SEED_APP_ID` + `BYTEPLUS_SEED_ACCESS_KEY` |
-| fal (`SEED_PROVIDER=fal`) | `FAL_KEY` |
+| Audio — BytePlus (default, new console) | `BYTEPLUS_SEED_API_KEY` |
+| Audio — BytePlus (legacy console) | `BYTEPLUS_SEED_APP_ID` + `BYTEPLUS_SEED_ACCESS_KEY` |
+| Audio — fal (`SEED_PROVIDER=fal`) | `FAL_KEY` |
+| LLM — BytePlus Ark Responses API | `ARK_API_KEY` (or `BYTEPLUS_ARK_API_KEY`) |
 
 > Never commit credentials or bake them into images. Protect hosted SSE endpoints with
 > `MCP_AUTH_TOKEN`.
@@ -227,6 +295,8 @@ the active provider and which credentials are configured.
 ## Roadmap
 
 - [x] Native BytePlus Seed Audio provider (`SEED_PROVIDER=byteplus`)
+- [x] Seed LLM text generation via the Ark Responses API (`seed_llm_generate` / `seed chat`)
+- [x] Remote-MCP tool passthrough for the LLM (`ark-beta-mcp`)
 - [ ] Local-file upload helper (host local audio/images → public URL)
 - [ ] Additional Seed models as they ship
 

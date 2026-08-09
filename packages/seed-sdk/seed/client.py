@@ -5,19 +5,23 @@ All transport/auth/response-shape specifics live in seed/providers/*.
 """
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 from .config import (
+    DEFAULT_LLM_MODEL,
     DEFAULT_MODEL,
     DEFAULT_OUTPUT_FORMAT,
     DEFAULT_PROVIDER,
     DEFAULT_SAMPLE_RATE,
+    LLM_MODELS,
     MODELS,
     VOICES,
     __version__,
 )
 from .credentials import credentials_configured
 from .exceptions import ValidationError
+from .llm import LLMParams, LLMResult, SeedLLM
 from .providers import AudioProvider, get_provider
 from .types import AudioParams, TaskResult
 
@@ -42,6 +46,7 @@ class SeedClient:
         byteplus_key: str | None = None,
         byteplus_app_id: str | None = None,
         byteplus_access_key: str | None = None,
+        ark_key: str | None = None,
         provider: str | None = None,
         profile: str = "default",
     ) -> None:
@@ -49,9 +54,11 @@ class SeedClient:
         self._byteplus_key = byteplus_key
         self._byteplus_app_id = byteplus_app_id
         self._byteplus_access_key = byteplus_access_key
+        self._ark_key = ark_key
         self._provider_name = (provider or DEFAULT_PROVIDER).strip().lower()
         self._profile = profile
         self._provider: AudioProvider | None = None
+        self._llm: SeedLLM | None = None
 
     def provider(self) -> AudioProvider:
         if self._provider is None:
@@ -100,6 +107,65 @@ class SeedClient:
             raise ValidationError("request_id is required.")
         return self.provider().status(request_id)
 
+    # -- LLM (Ark Responses) ---------------------------------------------
+    def llm(self) -> SeedLLM:
+        if self._llm is None:
+            self._llm = SeedLLM(api_key=self._ark_key, profile=self._profile)
+        return self._llm
+
+    def generate_text(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        system: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        mcp_servers: list[dict[str, Any]] | None = None,
+        temperature: float | None = None,
+        max_output_tokens: int | None = None,
+        stream: bool = False,
+    ) -> LLMResult:
+        """Generate text with a Seed LLM (e.g. seed-2-0-pro-260328).
+
+        Pass `mcp_servers` (a list of {server_label, server_url, ...}) to let the
+        model call remote MCP servers, or `tools` for raw Ark tool specs.
+        """
+        params = LLMParams(
+            prompt=prompt,
+            model=model,
+            system=system,
+            tools=tools,
+            mcp_servers=mcp_servers,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            stream=stream,
+        )
+        return self.llm().generate(params)
+
+    def stream_text(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        system: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        mcp_servers: list[dict[str, Any]] | None = None,
+        temperature: float | None = None,
+        max_output_tokens: int | None = None,
+    ) -> Iterator[str]:
+        """Yield assistant text deltas as they arrive from a Seed LLM."""
+        params = LLMParams(
+            prompt=prompt,
+            model=model,
+            system=system,
+            tools=tools,
+            mcp_servers=mcp_servers,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            stream=True,
+        )
+        return self.llm().stream_generate(params)
+
     # -- metadata ---------------------------------------------------------
     def list_voices(self) -> dict[str, Any]:
         return {"voices": list(VOICES), "count": len(VOICES)}
@@ -109,6 +175,13 @@ class SeedClient:
             "default_model": DEFAULT_MODEL,
             "provider": self._provider_name,
             "models": [{"model_id": mid, **caps} for mid, caps in MODELS.items()],
+        }
+
+    def list_llm_models(self) -> dict[str, Any]:
+        return {
+            "default_model": DEFAULT_LLM_MODEL,
+            "provider": "byteplus-ark",
+            "models": [{"model_id": mid, **caps} for mid, caps in LLM_MODELS.items()],
         }
 
     def ping(self) -> dict[str, Any]:

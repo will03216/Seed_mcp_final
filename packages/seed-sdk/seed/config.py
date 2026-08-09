@@ -40,6 +40,66 @@ BYTEPLUS_TIMEOUT = int(os.getenv("SEED_BYTEPLUS_TIMEOUT", "120"))
 RATE_MIN, RATE_MAX = -50, 100
 
 # ---------------------------------------------------------------------------
+# BytePlus Ark Responses API — Seed LLM (text generation, tool use, MCP).
+# Distinct host + auth from Seed Audio: POST /api/v3/responses with a
+# `Authorization: Bearer <ARK_API_KEY>` header. `stream=true` returns SSE;
+# `stream=false` returns a single aggregated response object.
+# MCP-tool passthrough additionally requires the `ark-beta-mcp: true` header.
+# ---------------------------------------------------------------------------
+ARK_RESPONSES_URL = os.getenv(
+    "SEED_ARK_RESPONSES_URL",
+    "https://ark.ap-southeast.bytepluses.com/api/v3/responses",
+)
+# LLM calls (tool use, long generations) can run well past the audio timeout.
+ARK_TIMEOUT = int(os.getenv("SEED_ARK_TIMEOUT", "300"))
+
+# Seed LLM model registry — new models slot in here; `alias` gives a short
+# handle for the CLI/MCP (e.g. `--model pro`).
+LLM_MODELS: dict[str, dict[str, Any]] = {
+    "seed-2-0-pro-260328": {
+        "label": "Seed 2.0 Pro",
+        "alias": "pro",
+        "kind": "llm",
+        "supports_tools": True,
+        "supports_mcp": True,
+        "supports_streaming": True,
+    },
+    "dola-seed-2-1-turbo-260628": {
+        "label": "Seed 2.1 Turbo",
+        "alias": "turbo",
+        "kind": "llm",
+        "supports_tools": True,
+        "supports_mcp": True,
+        "supports_streaming": True,
+    },
+}
+
+# Default Seed LLM model; override with SEED_LLM_MODEL or per-call.
+DEFAULT_LLM_MODEL = os.getenv("SEED_LLM_MODEL", "seed-2-0-pro-260328").strip()
+
+# alias -> canonical model id (e.g. "pro" -> "seed-2-0-pro-260328").
+LLM_ALIASES: dict[str, str] = {
+    caps["alias"]: mid for mid, caps in LLM_MODELS.items() if caps.get("alias")
+}
+
+
+def resolve_llm_model(model: str | None) -> str:
+    """Resolve a user-supplied model (id or alias) to a canonical model id.
+
+    Unknown ids pass through unchanged so newly-released models work without
+    a code change; empty/None falls back to DEFAULT_LLM_MODEL.
+    """
+    if not model or not model.strip():
+        return DEFAULT_LLM_MODEL
+    name = model.strip()
+    return LLM_ALIASES.get(name.lower(), name)
+
+
+def llm_model_caps(model: str) -> dict[str, Any]:
+    return LLM_MODELS.get(resolve_llm_model(model), {})
+
+
+# ---------------------------------------------------------------------------
 # HTTP tuning (shared across providers)
 # ---------------------------------------------------------------------------
 SUBMIT_TIMEOUT = int(os.getenv("SEED_SUBMIT_TIMEOUT", "30"))

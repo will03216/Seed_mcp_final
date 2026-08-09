@@ -106,12 +106,40 @@ def load_byteplus_auth(
     )
 
 
+def load_ark_key(explicit: str | None = None, *, profile: str = "default") -> str:
+    """Return the BytePlus Ark API key for Seed LLM, or raise AuthError.
+
+    Used by the Ark Responses API (Seed LLM). Accepts ``ARK_API_KEY`` (matching
+    the BytePlus console docs) or the namespaced ``BYTEPLUS_ARK_API_KEY``.
+    """
+    _load_dotenv()
+
+    value = (
+        (explicit or "").strip()
+        or os.getenv("ARK_API_KEY", "").strip()
+        or os.getenv("BYTEPLUS_ARK_API_KEY", "").strip()
+        or _read_ini(CREDENTIALS_PATH, profile, "ark_api_key")
+    )
+
+    if not value:
+        raise AuthError(
+            "ARK_API_KEY is not configured.\n"
+            "Seed LLM runs on the BytePlus Ark Responses API. Set the key via one of:\n"
+            "  export ARK_API_KEY=<key>\n"
+            "  seed auth login\n"
+            "  echo '[default]\\nark_api_key=<key>' > ~/.seed/credentials\n"
+            "Get a key at https://console.byteplus.com/ark/"
+        )
+    return value
+
+
 def write_credentials(
     fal_key: str = "",
     *,
     byteplus_seed_api_key: str = "",
     byteplus_seed_app_id: str = "",
     byteplus_seed_access_key: str = "",
+    ark_api_key: str = "",
     profile: str = "default",
 ) -> None:
     """Persist credentials to ~/.seed/credentials."""
@@ -129,6 +157,7 @@ def write_credentials(
         ("byteplus_seed_api_key", byteplus_seed_api_key),
         ("byteplus_seed_app_id", byteplus_seed_app_id),
         ("byteplus_seed_access_key", byteplus_seed_access_key),
+        ("ark_api_key", ark_api_key),
     ):
         if value:
             parser.set(profile, field, value)
@@ -175,5 +204,10 @@ def credentials_configured(*, profile: str = "default") -> dict[str, bool]:
         "byteplus_seed_access_key": bool(
             os.getenv("BYTEPLUS_SEED_ACCESS_KEY", "").strip()
             or _read_ini(CREDENTIALS_PATH, profile, "byteplus_seed_access_key")
+        ),
+        "ark_api_key": bool(
+            os.getenv("ARK_API_KEY", "").strip()
+            or os.getenv("BYTEPLUS_ARK_API_KEY", "").strip()
+            or _read_ini(CREDENTIALS_PATH, profile, "ark_api_key")
         ),
     }

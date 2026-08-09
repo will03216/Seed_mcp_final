@@ -1,16 +1,23 @@
 ---
 name: seed
-description: Generate speech and audio with BytePlus Seed Audio 1.0 — text-to-speech, voice presets, voice cloning from reference audio, multi-speaker drama, and task tracking. Runs on the BytePlus API by default (fal.ai optional).
-version: 0.1.0
+description: Generate with BytePlus Seed models from Claude Code — Seed Audio 1.0 (text-to-speech, voice presets, voice cloning, multi-speaker drama) and Seed LLM text generation (seed-2-0-pro-260328 / dola-seed-2-1-turbo-260628) with remote-MCP tool use via the Ark Responses API.
+version: 0.2.0
 ---
 
-# Seed Audio Generation
+# Seed (Audio + LLM)
 
-Use this skill to generate speech and audio with **BytePlus Seed Audio 1.0** directly from
-Claude Code. Seed Audio turns text (plus optional reference audio or an image) into natural,
-high-quality speech and sound.
+Use this skill to generate with **BytePlus Seed** models directly from Claude Code. Two
+capabilities, independent credentials:
 
-> **Provider note:** Seed Audio runs through two interchangeable backends, selected with
+- **Seed Audio 1.0** — turn text (plus optional reference audio or an image) into natural,
+  high-quality speech and sound. Needs `BYTEPLUS_SEED_API_KEY` (or `FAL_KEY`).
+- **Seed LLM** — text generation with tool use and remote-MCP passthrough, via the Ark
+  Responses API. Needs `ARK_API_KEY`. See [`references/llm.md`](references/llm.md).
+
+Pick by task: audio out → **Seed Audio** (`seed_audio_generate`); text out / reasoning /
+letting a model call other MCP servers → **Seed LLM** (`seed_llm_generate`).
+
+> **Audio provider note:** Seed Audio runs through two interchangeable backends, selected with
 > `SEED_PROVIDER`: **BytePlus** (default, synchronous — `seed_audio_generate` returns the
 > `audio_url` in one call, no polling) or **fal.ai** (`SEED_PROVIDER=fal`, async — submit
 > then poll). The tools behave the same either way; just check whether the submit result
@@ -19,7 +26,7 @@ high-quality speech and sound.
 
 ---
 
-## 🚦 Pre-flight
+## 🚦 Pre-flight (audio)
 
 1. **Craft the prompt first.** Before calling `seed_audio_generate`, shape the user's request
    into an effective audio prompt — see [`references/voice-prompting.md`](references/voice-prompting.md).
@@ -31,7 +38,7 @@ high-quality speech and sound.
 
 ---
 
-## Core rules
+## Core rules (audio)
 
 1. **Check the submit result first.** `seed_audio_generate` returns a `TaskResult`. With
    **BytePlus** (synchronous) it already has `status == "completed"` and `audio_url` — you're
@@ -63,8 +70,10 @@ high-quality speech and sound.
 |---|---|
 | `seed_audio_generate` | Submit an audio job (prompt + voice/audio_urls/image_url + format/rate/speed/volume/pitch). Returns `request_id`. |
 | `seed_check_task` | Poll a job; returns `audio_url` when `status == "completed"`. |
+| `seed_llm_generate` | Generate text with a Seed LLM (synchronous). Optional remote-MCP tool use. See [`references/llm.md`](references/llm.md). |
 | `seed_list_voices` | List the preset voice ids. |
-| `seed_list_models` | List Seed models + capabilities. |
+| `seed_list_models` | List Seed **Audio** models + capabilities. |
+| `seed_list_llm_models` | List Seed **LLM** models + capabilities. |
 | `seed_ping` | Check liveness, active provider, and credentials. |
 
 ### Parameters for `seed_audio_generate`
@@ -80,7 +89,7 @@ high-quality speech and sound.
 
 ---
 
-## Typical flow
+## Typical audio flow
 
 1. Clarify intent (voice, language, single vs multi-speaker).
 2. (Optional) `seed_list_voices` to pick a preset.
@@ -88,6 +97,49 @@ high-quality speech and sound.
 4. `seed_audio_generate(...)` → get `request_id`.
 5. Poll `seed_check_task(request_id)` every 5–10s until `completed`.
 6. Return the `audio_url`.
+
+---
+
+## 🧠 Seed LLM (text generation)
+
+Text generation via the BytePlus **Ark Responses API** — synchronous (`seed_llm_generate`
+returns the text directly, no polling). Full details in [`references/llm.md`](references/llm.md).
+
+### Core rules (LLM)
+
+1. **Synchronous — no polling.** `seed_llm_generate` returns the answer in the `text` field.
+   Never call `seed_check_task` on an LLM result (that's audio-only).
+2. **Model is switchable, default is `seed-2-0-pro-260328`.** Pass `model` as a full id or a
+   short alias: `pro` → `seed-2-0-pro-260328`, `turbo` → `dola-seed-2-1-turbo-260628`. Omit to
+   use the default (or the `SEED_LLM_MODEL` env override). Prefer **`pro`** for quality/depth,
+   **`turbo`** for speed/cost. Confirm `seed_list_llm_models` if unsure which exist.
+3. **Remote MCP tool use.** To let the model call another MCP server, pass `mcp_servers` — a
+   list of `{"server_label", "server_url", "require_approval": "never"}`. The `ark-beta-mcp`
+   header is set for you. Example: give it `https://mcp.deepwiki.com/mcp` to answer questions
+   about a GitHub repo. Only attach servers the user trusts.
+4. **`ARK_API_KEY` is separate** from the audio key. If it's missing, the tool errors with
+   `ARK_API_KEY is not configured` — tell the user to set it (`export ARK_API_KEY=...` or
+   `seed auth login`), don't fall back to audio.
+5. **Report tool activity.** When `mcp_servers` are used, the result may include `tool_calls`;
+   mention what the model called if relevant, and hand back the `text` as the deliverable.
+
+### Parameters for `seed_llm_generate`
+
+- `prompt` (required) — the user message / task.
+- `model` — id or alias (`pro` | `turbo` | full id). Empty = default.
+- `system` — optional system instruction.
+- `mcp_servers` — optional `[{"server_label", "server_url", "require_approval", "allowed_tools"?}]`.
+- `tools` — optional raw Ark tool specs (advanced; merged with `mcp_servers`).
+- `temperature` — `0.0`–`2.0` (optional). `max_output_tokens` — cap on output (optional).
+
+### Typical LLM flow
+
+1. Decide the model (`pro` vs `turbo`); default is fine when unspecified.
+2. If the task needs external data/tools, attach `mcp_servers`.
+3. `seed_llm_generate(prompt=..., model=..., mcp_servers=...)`.
+4. Return the `text`; surface `tool_calls`/`usage` when useful.
+
+---
 
 ## Troubleshooting
 
@@ -102,3 +154,9 @@ high-quality speech and sound.
   back with `SEED_PROVIDER=fal`.
 - **`BytePlus Seed Audio is synchronous … no task to poll`** → you called `seed_check_task` on a
   BytePlus result; the audio_url was already returned by `seed_audio_generate`.
+- **`ARK_API_KEY is not configured`** (LLM) → the Seed LLM key is unset; `export ARK_API_KEY=...`
+  or `seed auth login`. It's independent of the audio credentials.
+- **LLM returns empty `text` but has `tool_calls`** → the model only invoked tools without a
+  final answer; re-ask with a clearer instruction to summarise, or check the MCP server URL.
+- **Unknown model id** → ids pass through to Ark unchanged, so a typo surfaces as an Ark 4xx.
+  Confirm the id with `seed_list_llm_models`, or use the `pro`/`turbo` aliases.

@@ -8,6 +8,7 @@ import json
 import logging
 import random
 import time
+from collections.abc import Iterator
 from typing import Any
 from urllib import error, request
 
@@ -68,6 +69,41 @@ def request_with_retry(
                 time.sleep(wait)
 
     raise APIError(f"Request failed after {max_retries} attempts: {last_exc}") from last_exc
+
+
+def stream_sse(
+    url: str,
+    *,
+    method: str = "POST",
+    headers: dict[str, str],
+    payload: dict[str, Any] | None = None,
+    timeout: int = POLL_TIMEOUT,
+) -> Iterator[dict[str, Any]]:
+    """POST and yield decoded JSON objects from a `text/event-stream` response.
+
+    Each ``data: {...}`` line is parsed and yielded. The terminal
+    ``data: [DONE]`` sentinel ends the stream. Non-JSON data lines are skipped.
+    """
+    body = json.dumps(payload).encode() if payload is not None else None
+    req = request.Request(url, data=body, headers=headers, method=method)
+    try:
+        with request.urlopen(req, timeout=timeout) as resp:
+            for raw_line in resp:
+                line = raw_line.decode("utf-8", errors="ignore").strip()
+                if not line or not line.startswith("data:"):
+                    continue
+                data = line[len("data:"):].strip()
+                if data == "[DONE]":
+                    return
+                try:
+                    yield json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+    except error.HTTPError as exc:
+        detail = exc.read().decode(errors="ignore")
+        raise APIError(f"HTTP {exc.code}: {detail}", status_code=exc.code) from exc
+    except error.URLError as exc:
+        raise APIError(f"Network error: {exc.reason}") from exc
 
 
 def extract_nested(data: dict[str, Any], *keys: str) -> Any:

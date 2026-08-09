@@ -42,8 +42,8 @@ logger = logging.getLogger("seed_mcp")
 mcp = FastMCP(
     name="seed",
     instructions=(
-        "Tools for generating speech and audio with BytePlus Seed Audio 1.0. "
-        "Use seed_audio_generate to submit a job. If the response status is already "
+        "Tools for BytePlus Seed models — audio generation and LLM text generation. "
+        "AUDIO: use seed_audio_generate to submit a job. If the response status is already "
         "'completed' (synchronous providers like BytePlus), the audio_url is right there. "
         "Otherwise (async providers like fal) poll seed_check_task every 5–10 seconds until "
         "status == 'completed', which carries the audio_url. "
@@ -51,7 +51,11 @@ mcp = FastMCP(
         "passing up to 3 public reference audio URLs in audio_urls and referencing them "
         "in the prompt as @Audio1, @Audio2, @Audio3. audio_urls and image_url are mutually "
         "exclusive. Reference audio/image must be PUBLIC URLs — local file paths are not "
-        "supported yet."
+        "supported yet. "
+        "LLM: use seed_llm_generate for text generation with a Seed LLM (default "
+        "seed-2-0-pro-260328; pass model='turbo' for dola-seed-2-1-turbo-260628). It is "
+        "synchronous and returns the text directly. Pass mcp_servers to let the model call "
+        "remote MCP servers. List LLM models with seed_list_llm_models."
     ),
     transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
@@ -160,6 +164,62 @@ def seed_check_task(request_id: str) -> dict:
     return out
 
 
+# ---------------------------------------------------------------------------
+# LLM text generation (BytePlus Ark Responses API)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def seed_llm_generate(
+    prompt: str,
+    model: str = "",
+    system: str = "",
+    mcp_servers: list[dict] | None = None,
+    tools: list[dict] | None = None,
+    temperature: float | None = None,
+    max_output_tokens: int | None = None,
+) -> dict:
+    """Generate text with a Seed LLM via the BytePlus Ark Responses API.
+
+    Synchronous: returns the assistant's text directly (no polling). The model
+    can call remote MCP servers on your behalf when `mcp_servers` is supplied.
+
+    Args:
+        prompt: The user message / task for the model.
+        model: Seed LLM model id or alias. Empty = server default
+               (seed-2-0-pro-260328). Accepts 'pro' (seed-2-0-pro-260328),
+               'turbo' (dola-seed-2-1-turbo-260628), or any full model id.
+        system: Optional system instruction prepended to the conversation.
+        mcp_servers: Optional list of remote MCP servers for the model to use,
+               each {"server_label": str, "server_url": str,
+               "require_approval": "never"|..., "allowed_tools"?: [...]}.
+               Example: [{"server_label": "deepwiki",
+                          "server_url": "https://mcp.deepwiki.com/mcp",
+                          "require_approval": "never"}].
+        tools: Optional raw Ark tool specs (advanced; merged with mcp_servers).
+        temperature: Sampling temperature 0.0–2.0 (optional).
+        max_output_tokens: Cap on generated tokens (optional).
+
+    Returns:
+        dict with model, text, and (when tools ran) tool_calls + usage.
+    """
+    try:
+        result = _client().generate_text(
+            prompt,
+            model=model or None,
+            system=system or None,
+            tools=tools or None,
+            mcp_servers=mcp_servers or None,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+        )
+    except SeedError as exc:
+        return _err(exc)
+
+    out = result.to_dict()
+    out["message"] = "Generation complete. Read the `text` field."
+    return out
+
+
 @mcp.tool()
 def seed_list_voices() -> dict:
     """List the available Seed Audio preset voice ids."""
@@ -168,8 +228,14 @@ def seed_list_voices() -> dict:
 
 @mcp.tool()
 def seed_list_models() -> dict:
-    """List available Seed models and their capabilities."""
+    """List available Seed Audio models and their capabilities."""
     return _client().list_models()
+
+
+@mcp.tool()
+def seed_list_llm_models() -> dict:
+    """List available Seed LLM (text) models and their capabilities."""
+    return _client().list_llm_models()
 
 
 @mcp.tool()

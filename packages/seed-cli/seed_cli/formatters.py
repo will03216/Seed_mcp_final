@@ -35,3 +35,30 @@ def models_table(data: dict) -> None:
     console.print(table)
     console.print(f"\n  Default:  [blue]{data.get('default_model', '')}[/blue]")
     console.print(f"  Provider: [blue]{data.get('provider', '')}[/blue]")
+
+
+def llm_models_table(data: dict) -> None:
+    table = Table(title="Seed LLM Models", show_lines=True, header_style="bold cyan")
+    table.add_column("Model ID", style="blue", no_wrap=True)
+    table.add_column("Label")
+    table.add_column("Alias")
+    table.add_column("Tools")
+    table.add_column("MCP")
+    table.add_column("Streaming")
+
+    def _mark(v: object) -> str:
+        return "✔" if v else "—"
+
+    for m in data.get("models", []):
+        table.add_row(
+            m["model_id"],
+            m.get("label", ""),
+            m.get("alias", ""),
+            _mark(m.get("supports_tools")),
+            _mark(m.get("supports_mcp")),
+            _mark(m.get("supports_streaming")),
+        )
+
+    console.print(table)
+    console.print(f"\n  Default:  [blue]{data.get('default_model', '')}[/blue]")
+    console.print(f"  Provider: [blue]{data.get('provider', '')}[/blue]")

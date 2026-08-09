@@ -1,0 +1,27 @@
+{
+    "content": [
+        {
+            "type": "text",
+            "text": "STYLE: Cinematic basketball sports moment, film look, warm arena lighting, soft film grain, high energy. SCENE: Packed indoor basketball arena during an intense game, bright court lights flaring off the polished hardwood, blurred crowd in the background reacting in waves, design language: glossy hardwood court and bold contrasting team colors. CHARACTER / SUBJECT: A tall, athletic basketball player in a bright yellow jersey and shorts with bold lettering, matching wristband and protective goggles, gripping the ball at the free throw line with focused intensity, his identity staying consistent with the start image look. CAMERA: Cinematic tight side view closeup that begins with a gentle slow dolly push-in on the player, then naturally tilts and tracks upward to follow the ball's path in one continuous take. ACTION: The player steadies at the free throw line and dribbles the ball once, then takes a deep breath and raises the ball into shooting position and releases the shot toward the hoop as the camera moves slightly closer; the camera then follows the ball in real time as it arcs through the air and suddenly ignites into a blazing fireball, trailing vivid sparks and embers while streaking toward the basket; the flaming ball swishes cleanly through the unseen net and a stylized explosion of light and energy erupts from the rim in the distance, after which the shot rapidly swings back down into a dramatic closeup of the player's face as arena light flickers across his goggles and he reacts with a visible gesture of surprise and terror, his expression shifting and his shoulders tensing as the crowd behind him continues to move and shout. ON-SCREEN TEXT: clean frame, no on-screen text. SOUND DESIGN: Echoing arena ambience, distant crowd murmurs swelling into excited shouts, squeaks of sneakers on the court, the soft thump of the dribble and the rush of his breath before the shot, followed by a rising whoosh and crackling roar as the ball turns into fire, a sharp cinematic blast as it scores and the rim explodes with energy, then the echoing roar of the crowd and the player's startled gasp filling the tail of the shot."
+        },
+        {
+            "type": "image_url",
+            "image_url": {
+                "url": "asset://asset-20260727222026-lnrtq"
+            },
+            "role": "first_frame"
+        }
+    ],
+    "ratio": "9:16",
+    "duration": 15,
+    "resolution": "1080p",
+    "watermark": false,
+    "priority": 8,
+    "enable_safety_checker": false,
+    "moderation_options": {
+        "ip_mode": "custom",
+        "ips": [
+            "right-s-20260724085424-gei2x"
+        ]
+    }
+}

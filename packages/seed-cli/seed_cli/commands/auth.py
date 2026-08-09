@@ -34,16 +34,20 @@ def login(
         "  BYTEPLUS_SEED_API_KEY", password=True, default="", show_default=False
     )
 
+    console.print("\n[bold]Seed LLM[/bold] (optional) — [url]https://console.byteplus.com/ark/[/url]")
+    ark_key = Prompt.ask("  ARK_API_KEY", password=True, default="", show_default=False)
+
     console.print("\n[bold]fal.ai[/bold] (optional) — [url]https://fal.ai/dashboard/keys[/url]")
     fal_key = Prompt.ask("  FAL_KEY", password=True, default="", show_default=False)
 
-    if not byteplus_key and not fal_key:
+    if not byteplus_key and not fal_key and not ark_key:
         err("At least one provider key is required. Aborting.")
         raise typer.Exit(1)
 
     write_credentials(
         fal_key.strip(),
         byteplus_seed_api_key=byteplus_key.strip(),
+        ark_api_key=ark_key.strip(),
         profile=profile,
     )
     ok(f"Credentials saved to ~/.seed/credentials  [profile: {profile}]")
@@ -66,15 +70,16 @@ def check(
 
     byteplus_legacy = status["byteplus_seed_app_id"] and status["byteplus_seed_access_key"]
     for label, present in [
-        ("BYTEPLUS_SEED_API_KEY  (default provider)   ", status["byteplus_seed_api_key"]),
+        ("BYTEPLUS_SEED_API_KEY  (audio, default)     ", status["byteplus_seed_api_key"]),
         ("BYTEPLUS_SEED_APP_ID + ACCESS_KEY (legacy)  ", byteplus_legacy),
+        ("ARK_API_KEY            (Seed LLM / text)    ", status["ark_api_key"]),
         ("FAL_KEY                (fal.ai provider)    ", status["fal_key"]),
     ]:
         mark = "[success]✔[/success]" if present else "[error]✖[/error]"
         state = "configured" if present else "missing"
         console.print(f"  {mark}  {label}  [dim]{state}[/dim]")
 
-    if status["byteplus_seed_api_key"] or byteplus_legacy or status["fal_key"]:
+    if status["byteplus_seed_api_key"] or byteplus_legacy or status["fal_key"] or status["ark_api_key"]:
         console.print("\n  [success]At least one provider is configured — ready to generate.[/success]\n")
     else:
         console.print("\n  [error]No provider configured.[/error]")

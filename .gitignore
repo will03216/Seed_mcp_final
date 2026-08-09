@@ -47,3 +47,20 @@ uv.lock
 
 # Docker
 .dockerignore
+
+# --- added during backup commit ---
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+.next/
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+*.pem
+*.key
+uploads/
